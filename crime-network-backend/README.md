@@ -1,4 +1,4 @@
-# VIGIL — AI Crime Network Analyzer (Python Backend)
+# VIGIL — AI Crime Network Analyzer 
 
 SIH prototype for: **AI-powered system to uncover hidden criminal networks
 from FIRs, CDRs, financial records, surveillance and social media
