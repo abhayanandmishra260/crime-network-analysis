@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VIGIL — AI Crime Network Analyzer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0E13;
+    --panel:#111820;
+    --panel-2:#151D27;
+    --border:#232E3A;
+    --text:#DCE4EC;
+    --text-dim:#7C8B9B;
+    --amber:#F2A93B;
+    --teal:#3FBFAE;
+    --red:#E5484D;
+    --violet:#8B7FD6;
+    --mono:'IBM Plex Mono', monospace;
+    --display:'Space Grotesk', sans-serif;
+    --body:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    background:var(--bg); color:var(--text); font-family:var(--body);
+    width:100%; height:100%; overflow:hidden;
+  }
+  .app{ display:flex; flex-direction:column; height:100vh; }
+
+  /* ---------- TOP BAR ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, #0D131A, #0A0E13);
+    flex-shrink:0;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:30px; height:30px; border-radius:6px;
+    background:conic-gradient(from 220deg, var(--amber), var(--teal), var(--violet), var(--amber));
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--display); font-weight:700; font-size:14px; color:#0A0E13;
+  }
+  .brand-name{ font-family:var(--display); font-weight:700; font-size:19px; letter-spacing:0.5px; }
+  .brand-tag{ font-family:var(--mono); font-size:10.5px; color:var(--text-dim); letter-spacing:1.5px; text-transform:uppercase; margin-top:1px;}
+  .status-strip{ display:flex; gap:26px; align-items:center; }
+  .stat{ text-align:right; }
+  .stat-val{ font-family:var(--mono); font-size:17px; font-weight:600; }
+  .stat-label{ font-size:9.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; }
+  .stat-val.amber{ color:var(--amber);} .stat-val.red{color:var(--red);} .stat-val.teal{color:var(--teal);}
+
+  /* ---------- MAIN LAYOUT ---------- */
+  .main{ flex:1; display:flex; min-height:0; }
+
+  .col-left{
+    width:330px; flex-shrink:0; border-right:1px solid var(--border);
+    display:flex; flex-direction:column; background:var(--panel); min-height:0;
+  }
+  .col-center{ flex:1; position:relative; min-width:0; background:
+    radial-gradient(circle at 30% 20%, #0D141C 0%, var(--bg) 60%); }
+  .col-right{
+    width:340px; flex-shrink:0; border-left:1px solid var(--border);
+    background:var(--panel); display:flex; flex-direction:column; min-height:0;
+  }
+
+  .panel-head{
+    padding:14px 16px 10px; border-bottom:1px solid var(--border); flex-shrink:0;
+  }
+  .panel-title{ font-family:var(--display); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:1px; }
+  .panel-sub{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+  .scroll{ overflow-y:auto; flex:1; min-height:0; }
+  .scroll::-webkit-scrollbar{ width:7px; }
+  .scroll::-webkit-scrollbar-thumb{ background:#243040; border-radius:4px; }
+  .scroll::-webkit-scrollbar-track{ background:transparent; }
+
+  /* ---------- PIPELINE STEPS ---------- */
+  .pipeline{ padding:14px 16px; display:flex; flex-direction:column; gap:8px; border-bottom:1px solid var(--border); }
+  .step-btn{
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:8px;
+    cursor:pointer; transition:all .15s ease; font-family:var(--body); text-align:left;
+  }
+  .step-btn:hover{ border-color:var(--teal); }
+  .step-btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .step-btn.done{ border-color:var(--teal); background:rgba(63,191,174,0.07); }
+  .step-num{
+    width:22px; height:22px; border-radius:50%; background:#1A232E; border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:11px; flex-shrink:0;
+  }
+  .step-btn.done .step-num{ background:var(--teal); color:#0A0E13; border-color:var(--teal); }
+  .step-text{ flex:1; }
+  .step-title{ font-size:12.5px; font-weight:600; }
+  .step-desc{ font-size:10.5px; color:var(--text-dim); margin-top:1px; }
+
+  /* ---------- RECORD LIST ---------- */
+  .upload-zone{
+    display:flex; align-items:flex-start; gap:10px; padding:12px;
+    background:var(--panel-2); border:1.5px dashed var(--teal); border-radius:8px; margin-bottom:8px;
+  }
+  .upload-zone .step-num{ background:var(--teal); color:#0A0E13; border-color:var(--teal); }
+  .upload-btn{
+    margin-top:8px; background:var(--teal); color:#0A0E13; border:none; border-radius:6px;
+    padding:7px 14px; font-family:var(--display); font-weight:600; font-size:11px; cursor:pointer;
+  }
+  .upload-btn:hover{ background:#55D6C5; }
+  .upload-filename{ display:block; margin-top:6px; font-family:var(--mono); font-size:10px; color:var(--text-dim); }
+  .add-record-panel{
+    padding:12px 16px; border-bottom:1px solid var(--border); background:var(--panel-2);
+  }
+  .add-record-title{ font-family:var(--display); font-weight:600; font-size:11.5px; color:var(--teal); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px; }
+  .add-record-row{ display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .ar-input{
+    background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text);
+    font-family:var(--body); font-size:11.5px; padding:7px 9px; outline:none;
+  }
+  .ar-input:focus{ border-color:var(--teal); }
+  select.ar-input{ flex-shrink:0; width:110px; }
+  .ar-textarea{
+    width:100%; min-height:60px; background:var(--bg); border:1px solid var(--border); border-radius:6px;
+    color:var(--text); font-family:var(--body); font-size:11.5px; padding:8px 9px; outline:none;
+    resize:vertical; margin-bottom:8px;
+  }
+  .ar-textarea:focus{ border-color:var(--teal); }
+  .ar-hint{ font-size:9.5px; color:var(--text-dim); flex:1; line-height:1.4; }
+  .ar-btn{
+    background:var(--teal); color:#0A0E13; border:none; border-radius:6px; padding:8px 16px;
+    font-family:var(--display); font-weight:600; font-size:11px; cursor:pointer; flex-shrink:0;
+  }
+  .ar-btn:hover{ background:#55D6C5; }
+  .record{
+    padding:11px 16px; border-bottom:1px solid #182029; cursor:default;
+  }
+  .record-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+  .record-source{
+    font-family:var(--mono); font-size:9.5px; padding:2px 7px; border-radius:20px;
+    text-transform:uppercase; letter-spacing:0.5px; font-weight:600;
+  }
+  .src-FIR{ background:rgba(229,72,77,0.15); color:var(--red); }
+  .src-CDR{ background:rgba(63,191,174,0.15); color:var(--teal); }
+  .src-Bank{ background:rgba(242,169,59,0.15); color:var(--amber); }
+  .src-Social{ background:rgba(139,127,214,0.15); color:var(--violet); }
+  .src-Surveillance{ background:rgba(220,228,236,0.1); color:var(--text); }
+  .record-id{ font-family:var(--mono); font-size:9.5px; color:var(--text-dim); }
+  .record-text{ font-size:11.5px; line-height:1.55; color:var(--text-dim); }
+  .ent{ padding:0px 3px; border-radius:3px; font-weight:600; }
+  .ent-person{ background:rgba(63,191,174,0.18); color:#7EE8D9; }
+  .ent-location{ background:rgba(242,169,59,0.18); color:#F7C978; }
+  .ent-phone{ background:rgba(139,127,214,0.18); color:#B4A9EE; }
+  .ent-vehicle{ background:rgba(229,72,77,0.18); color:#F1898D; }
+  .ent-org{ background:rgba(220,228,236,0.14); color:#DCE4EC; }
+
+  /* ---------- GRAPH AREA ---------- */
+  .graph-toolbar{
+    position:absolute; top:14px; left:16px; z-index:5; display:flex; gap:8px; align-items:center;
+  }
+  .chip{
+    font-family:var(--mono); font-size:10.5px; padding:5px 10px; border-radius:20px;
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text-dim);
+    display:flex; align-items:center; gap:5px;
+  }
+  .dot{ width:7px; height:7px; border-radius:50%; }
+  .legend{
+    position:absolute; bottom:14px; left:16px; z-index:5; background:var(--panel-2);
+    border:1px solid var(--border); border-radius:10px; padding:10px 14px;
+    font-size:10.5px; color:var(--text-dim); display:flex; gap:16px;
+  }
+  .legend-item{ display:flex; align-items:center; gap:6px; }
+  svg{ width:100%; height:100%; display:block; }
+  .node-label{ font-family:var(--mono); font-size:9.5px; fill:var(--text); pointer-events:none; }
+  .empty-state{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px; color:var(--text-dim); text-align:center;
+  }
+  .empty-state .big{ font-family:var(--display); font-size:15px; color:var(--text); }
+
+  /* ---------- RIGHT PANEL ---------- */
+  .inspector-empty{ padding:20px 16px; color:var(--text-dim); font-size:12px; line-height:1.6; }
+  .insp-node{ padding:16px; border-bottom:1px solid var(--border); }
+  .insp-name{ font-family:var(--display); font-weight:700; font-size:17px; }
+  .insp-type{ font-family:var(--mono); font-size:10px; color:var(--amber); text-transform:uppercase; letter-spacing:1px; margin-top:2px;}
+  .metric-row{ display:flex; justify-content:space-between; padding:8px 16px; border-bottom:1px solid #182029; font-size:12px; }
+  .metric-label{ color:var(--text-dim); }
+  .metric-val{ font-family:var(--mono); font-weight:600; }
+  .conn-item{
+    padding:9px 16px; border-bottom:1px solid #182029; font-size:11.5px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .conn-rel{ color:var(--text-dim); font-size:10.5px; }
+
+  .alert{
+    margin:10px 12px; padding:11px 12px; border-radius:8px; border:1px solid rgba(229,72,77,0.35);
+    background:rgba(229,72,77,0.08); font-size:11.5px; line-height:1.5;
+  }
+  .alert-title{ display:flex; align-items:center; gap:6px; font-weight:700; color:var(--red); margin-bottom:3px; font-size:11.5px; }
+  .influencer-card{
+    margin:10px 12px; padding:11px 12px; border-radius:8px; border:1px solid rgba(242,169,59,0.35);
+    background:rgba(242,169,59,0.06);
+  }
+  .rank{ font-family:var(--mono); font-size:10px; color:var(--amber); }
+  .infl-name{ font-family:var(--display); font-weight:600; font-size:13.5px; margin:3px 0; }
+  .infl-why{ font-size:10.5px; color:var(--text-dim); line-height:1.5; }
+
+  .tabs{ display:flex; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .tab{ flex:1; padding:11px; text-align:center; font-size:11px; font-weight:600; color:var(--text-dim); cursor:pointer; border-bottom:2px solid transparent; text-transform:uppercase; letter-spacing:0.5px;}
+  .tab.active{ color:var(--text); border-bottom-color:var(--teal); }
+  .tab-panel{ display:none; flex-direction:column; flex:1; min-height:0; }
+  .tab-panel.active{ display:flex; }
+
+  .note{
+    padding:10px 16px; font-size:10.5px; color:var(--text-dim); line-height:1.5; border-top:1px solid var(--border);
+    background:var(--panel-2);
+  }
+  .note b{ color:var(--text); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">V</div>
+      <div>
+        <div class="brand-name">VIGIL</div>
+        <div class="brand-tag">AI Crime Network Analyzer </div>
+      </div>
+    </div>
+    <div class="status-strip">
+      <div class="stat"><div class="stat-val" id="statRecords">0</div><div class="stat-label">Records</div></div>
+      <div class="stat"><div class="stat-val teal" id="statEntities">0</div><div class="stat-label">Entities</div></div>
+      <div class="stat"><div class="stat-val amber" id="statLinks">0</div><div class="stat-label">Links</div></div>
+      <div class="stat"><div class="stat-val red" id="statAlerts">0</div><div class="stat-label">Alerts</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- LEFT: pipeline + raw data -->
+    <div class="col-left">
+      <div class="pipeline">
+        <div class="upload-zone" id="uploadZone">
+          <div class="step-num" id="uploadStepNum">1</div>
+          <div class="step-text" style="flex:1;">
+            <div class="step-title">Upload Intelligence Data</div>
+            <div class="step-desc">Upload a .csv or .json case file (FIR / CDR / Bank / Surveillance / Social)</div>
+            <input type="file" id="fileInput" accept=".csv,.json" style="display:none;" onchange="handleFileUpload(event)">
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
+            <span class="upload-filename" id="uploadFilename"></span>
+          </div>
+        </div>
+        <button class="step-btn" id="btnStep2" onclick="runStep2()" disabled>
+          <div class="step-num">2</div>
+          <div class="step-text">
+            <div class="step-title">Extract Entities (NLP)</div>
+            <div class="step-desc">NER: people, locations, phones, vehicles, orgs</div>
+          </div>
+        </button>
+        <button class="step-btn" id="btnStep3" onclick="runStep3()" disabled>
+          <div class="step-num">3</div>
+          <div class="step-text">
+            <div class="step-title">Build Relationship Graph</div>
+            <div class="step-desc">Co-occurrence linking + weighting</div>
+          </div>
+        </button>
+        <button class="step-btn" id="btnStep4" onclick="runStep4()" disabled>
+          <div class="step-num">4</div>
+          <div class="step-text">
+            <div class="step-title">Run Graph Analytics</div>
+            <div class="step-desc">Centrality, key influencers, anomalies</div>
+          </div>
+        </button>
+      </div>
+      <div class="panel-head">
+        <div class="panel-title">Raw Intelligence Feed</div>
+        <div class="panel-sub">Upload a case file above to begin</div>
+      </div>
+      <div class="add-record-panel" id="addRecordPanel" style="display:none;">
+        <div class="add-record-title">+ Add Your Own Record</div>
+        <div class="add-record-row">
+          <select id="newSource" class="ar-input">
+            <option value="FIR">FIR</option>
+            <option value="CDR">CDR</option>
+            <option value="Bank">Bank</option>
+            <option value="Surveillance">Surveillance</option>
+            <option value="Social">Social</option>
+          </select>
+          <input id="newComplainant" class="ar-input" placeholder="Complainant (FIR only, optional)" style="flex:1;">
+        </div>
+        <textarea id="newText" class="ar-textarea" placeholder="Paste or type the record text here — e.g. &quot;Aman Kapoor was seen meeting Sunil Yadav near Kankarbagh, exchanging a package.&quot;"></textarea>
+        <div class="add-record-row">
+          <span class="ar-hint">Tip: mention full names exactly as elsewhere so the graph links them correctly.</span>
+          <button class="ar-btn" onclick="addCustomRecord()">Add Record</button>
+        </div>
+      </div>
+      <div class="scroll" id="recordList"></div>
+    </div>
+
+    <!-- CENTER: graph -->
+    <div class="col-center">
+      <div class="graph-toolbar" id="graphToolbar" style="display:none;">
+        <div class="chip"><span class="dot" style="background:#7EE8D9"></span>Person</div>
+        <div class="chip"><span class="dot" style="background:#F7C978"></span>Location</div>
+        <div class="chip"><span class="dot" style="background:#B4A9EE"></span>Phone</div>
+        <div class="chip"><span class="dot" style="background:#F1898D"></span>Vehicle</div>
+        <div class="chip"><span class="dot" style="background:#DCE4EC"></span>Org</div>
+      </div>
+      <div class="empty-state" id="emptyState">
+        <div class="big">No network generated yet</div>
+        <div>Run steps 1 → 4 on the left to build the criminal network graph</div>
+      </div>
+      <svg id="graphSvg" style="display:none;"></svg>
+      <div class="legend" id="graphLegend" style="display:none;">
+        <div class="legend-item">⬤ node size = influence score</div>
+        <div class="legend-item" style="color:#3FBFAE;">— solid teal = corroborated by 2+ source types</div>
+        <div class="legend-item" style="color:#7C8B9B;">┄ dashed grey = single-source, unverified</div>
+        <div class="legend-item" style="color:#E5484D;">⊙? red ring = person named only in FIR complaint(s)</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: inspector -->
+    <div class="col-right">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('inspect')">Inspector</div>
+        <div class="tab" onclick="switchTab('influencers')">Key Players</div>
+        <div class="tab" onclick="switchTab('alerts')">Alerts</div>
+      </div>
+
+      <div class="tab-panel active" id="tab-inspect">
+        <div class="scroll" id="inspectorBody">
+          <div class="inspector-empty">Select a node in the network graph to see its profile, connections and computed risk metrics here.</div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-influencers">
+        <div class="scroll" id="influencerBody">
+          <div class="inspector-empty">Run analytics (Step 4) to identify key influencers in the network.</div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-alerts">
+        <div class="scroll" id="alertBody">
+          <div class="inspector-empty">Run analytics (Step 4) to surface suspicious patterns.</div>
+        </div>
+      </div>
+
+      <div class="note"><b>Note:</b> spaCy NER + NetworkX run server-side (degree/betweenness centrality, community detection, articulation points). Every relationship is also scored for <b>corroboration</b>: an edge only shows as "verified" (solid teal) once 2+ independent source types confirm it — a single FIR alone is never enough. Entities named only in an FIR get a red "?" ring and a caution alert, so a fabricated complaint can't masquerade as confirmed evidence.</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   BACKEND-DRIVEN PIPELINE
+   All NLP (spaCy NER) and graph analytics (NetworkX: degree/betweenness
+   centrality, community detection, articulation points) run in Python on
+   the server. This file only calls the API and renders the results.
+   ===================================================================== */
+const API = ""; // same-origin, FastAPI serves this file too
+
+let RECORDS = [];
+let entitiesExtracted = false;
+let graphBuilt = false;
+let analyticsRun = false;
+let graph = { nodes: [], links: [], alerts: [] };
+let simulation = null;
+let selectedNode = null;
+
+const TYPE_COLOR = { person:"#7EE8D9", location:"#F7C978", phone:"#B4A9EE", vehicle:"#F1898D", org:"#DCE4EC" };
+
+/* =====================================================================
+   STEP 1 — INGEST (fetch sample records from backend)
+   ===================================================================== */
+function renderRecordList(){
+  const list = document.getElementById("recordList");
+  list.innerHTML = "";
+  RECORDS.forEach(r=>{
+    const div = document.createElement("div");
+    div.className = "record";
+    div.innerHTML = `
+      <div class="record-head">
+        <span class="record-source src-${r.source}">${r.source}</span>
+        <span class="record-id">${r.id}</span>
+      </div>
+      ${r.complainant ? `<div style="font-size:10px; color:var(--text-dim); margin-bottom:4px;">Complainant: <span style="color:var(--text);">${r.complainant}</span></div>` : ""}
+      <div class="record-text" id="text-${r.id}">${r.text}</div>
+    `;
+    list.appendChild(div);
+  });
+  document.getElementById("statRecords").textContent = RECORDS.length;
+}
+
+/* Simple RFC4180-ish CSV parser: handles quoted fields, commas and quotes inside quotes */
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  text = text.replace(/\r\n/g, "\n");
+  for(let i=0; i<text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else{ inQuotes = false; }
+      } else { field += c; }
+    } else {
+      if(c === '"'){ inQuotes = true; }
+      else if(c === ','){ row.push(field); field = ""; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ""; }
+      else { field += c; }
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  if(!rows.length) return [];
+  const header = rows[0].map(h=>h.trim().toLowerCase());
+  return rows.slice(1).filter(r=>r.length>1 || r[0]!=="").map(r=>{
+    const obj = {};
+    header.forEach((h,idx)=> obj[h] = (r[idx] !== undefined ? r[idx] : "").trim());
+    return obj;
+  });
+}
+
+function normaliseUploadedRecords(raw){
+  return raw.map((r, i)=>({
+    id: r.id || `UP-${String(i+1).padStart(3,"0")}`,
+    source: r.source || "FIR",
+    weight: r.weight ? Number(r.weight) : 1,
+    complainant: r.complainant && r.complainant.length ? r.complainant : null,
+    text: r.text || ""
+  })).filter(r=>r.text.length > 0);
+}
+
+function handleFileUpload(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  document.getElementById("uploadFilename").textContent = "Reading " + file.name + "…";
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    let parsed;
+    try{
+      if(file.name.toLowerCase().endsWith(".json")){
+        const data = JSON.parse(e.target.result);
+        parsed = Array.isArray(data) ? data : data.records;
+      } else {
+        parsed = parseCSV(e.target.result);
+      }
+      if(!parsed || !parsed.length) throw new Error("No records found in file");
+      RECORDS = normaliseUploadedRecords(parsed);
+    } catch(err){
+      document.getElementById("uploadFilename").textContent = "⚠ Could not parse file: " + err.message;
+      return;
+    }
+
+    document.getElementById("uploadFilename").textContent = "✓ " + file.name + " — " + RECORDS.length + " records loaded";
+    document.getElementById("uploadStepNum").innerHTML = "✓";
+    renderRecordList();
+    document.getElementById("addRecordPanel").style.display = "block";
+    enable("btnStep2");
+  };
+  reader.readAsText(file);
+}
+
+let customRecordCounter = 1;
+
+function addCustomRecord(){
+  const source = document.getElementById("newSource").value;
+  const complainant = document.getElementById("newComplainant").value.trim();
+  const text = document.getElementById("newText").value.trim();
+
+  if(!text){
+    alert("Record text daalna zaroori hai — bina text ke entity extraction nahi ho sakta.");
+    return;
+  }
+
+  const newRecord = {
+    id: `CUSTOM-${String(customRecordCounter++).padStart(3, "0")}`,
+    source: source,
+    text: text,
+    weight: source === "CDR" ? 3 : source === "Bank" ? 3 : 2,
+    complainant: (source === "FIR" && complainant) ? complainant : null
+  };
+  RECORDS.push(newRecord);
+  renderRecordList();
+
+  // clear the form
+  document.getElementById("newComplainant").value = "";
+  document.getElementById("newText").value = "";
+
+  // data changed — pipeline must be re-run from Extract onwards for this to count
+  entitiesExtracted = false;
+  graphBuilt = false;
+  analyticsRun = false;
+  ["btnStep2","btnStep3","btnStep4"].forEach(id=>{
+    const btn = document.getElementById(id);
+    btn.classList.remove("done");
+    btn.querySelector(".step-num").textContent = id === "btnStep2" ? "2" : id === "btnStep3" ? "3" : "4";
+  });
+  enable("btnStep2");
+  document.getElementById("btnStep3").disabled = true;
+  document.getElementById("btnStep4").disabled = true;
+}
+
+/* =====================================================================
+   STEP 2 — REAL NER via spaCy on the backend (/api/extract)
+   ===================================================================== */
+async function runStep2(){
+  const btn = document.getElementById("btnStep2");
+  btn.querySelector(".step-desc").textContent = "Calling spaCy NER model…";
+
+  const res = await fetch(`${API}/api/extract`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({records: RECORDS})
+  });
+  const data = await res.json();
+
+  let allEntities = new Set();
+  data.records.forEach(r=>{
+    let html = r.text;
+    const sorted = [...r.entities].sort((a,b)=>b.text.length-a.text.length);
+    sorted.forEach(ent=>{
+      const safe = ent.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(safe, "g");
+      html = html.replace(re, `<span class="ent ent-${ent.type}">${ent.text}</span>`);
+      allEntities.add(ent.text);
+    });
+    const el = document.getElementById(`text-${r.id}`);
+    if(el) el.innerHTML = html;
+  });
+
+  document.getElementById("statEntities").textContent = allEntities.size;
+  btn.querySelector(".step-desc").textContent = "NER: people, locations, phones, vehicles, orgs";
+  entitiesExtracted = true;
+  markDone("btnStep2");
+  enable("btnStep3");
+}
+
+/* =====================================================================
+   STEP 3 + 4 — full pipeline runs server-side in one call (/api/analyze):
+   NetworkX graph build + degree/betweenness centrality + community
+   detection + articulation points + rule-based alerts.
+   ===================================================================== */
+async function runStep3(){
+  const btn = document.getElementById("btnStep3");
+  btn.querySelector(".step-desc").textContent = "Calling NetworkX graph builder…";
+
+  const res = await fetch(`${API}/api/analyze`, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({records: RECORDS})
+  });
+  const data = await res.json();
+
+  graph.nodes = data.nodes;
+  graph.links = data.links;
+  graph.alerts = data.alerts;
+  graph.top_influencers = data.top_influencers;
+  graph.num_communities = data.num_communities;
+
+  document.getElementById("statLinks").textContent = graph.links.length;
+  btn.querySelector(".step-desc").textContent = "Co-occurrence linking + weighting";
+  graphBuilt = true;
+  markDone("btnStep3");
+  enable("btnStep4");
+  renderGraph();
+}
+
+function runStep4(){
+  // Analytics were already computed server-side in step 3's /api/analyze call —
+  // this step reveals influence scores, key players and alerts in the UI.
+  analyticsRun = true;
+  markDone("btnStep4");
+  renderGraph();
+  renderInfluencers();
+  renderAlerts();
+  switchTab('influencers');
+}
+
+/* =====================================================================
+   7. RENDER — FORCE GRAPH
+   ===================================================================== */
+function renderGraph(){
+  document.getElementById("emptyState").style.display = "none";
+  document.getElementById("graphSvg").style.display = "block";
+  document.getElementById("graphToolbar").style.display = "flex";
+  document.getElementById("graphLegend").style.display = "flex";
+
+  const svgEl = document.getElementById("graphSvg");
+  const width = svgEl.clientWidth, height = svgEl.clientHeight;
+  const svg = d3.select("#graphSvg");
+  svg.selectAll("*").remove();
+
+  const container = svg.append("g");
+  svg.call(d3.zoom().scaleExtent([0.3,3]).on("zoom", (ev)=>container.attr("transform", ev.transform)));
+
+  const nodesCopy = graph.nodes.map(n=>({...n}));
+  const linksCopy = graph.links.map(l=>({...l}));
+
+  simulation = d3.forceSimulation(nodesCopy)
+    .force("link", d3.forceLink(linksCopy).id(d=>d.id).distance(l=>110 - Math.min(l.weight,10)*4).strength(0.6))
+    .force("charge", d3.forceManyBody().strength(-260))
+    .force("center", d3.forceCenter(width/2, height/2))
+    .force("collision", d3.forceCollide().radius(30));
+
+  const link = container.append("g").selectAll("line")
+    .data(linksCopy).join("line")
+    .attr("stroke", d=> analyticsRun ? (d.confidence==="verified" ? "#3FBFAE" : "#3A4756") : "#2C3A48")
+    .attr("stroke-opacity", d=> analyticsRun ? (d.confidence==="verified" ? 0.8 : 0.55) : 1)
+    .attr("stroke-width", d=> analyticsRun && d.confidence==="verified" ? Math.min(1.5+d.weight*0.6, 7) : Math.min(1+d.weight*0.5, 6))
+    .attr("stroke-dasharray", d=> analyticsRun ? (d.confidence==="verified" ? "0" : "3,3") : "3,2")
+    .attr("stroke-linecap","round");
+
+  const node = container.append("g").selectAll("g")
+    .data(nodesCopy).join("g")
+    .style("cursor","pointer")
+    .call(d3.drag()
+      .on("start",(ev,d)=>{ if(!ev.active) simulation.alphaTarget(0.25).restart(); d.fx=d.x; d.fy=d.y; })
+      .on("drag",(ev,d)=>{ d.fx=ev.x; d.fy=ev.y; })
+      .on("end",(ev,d)=>{ if(!ev.active) simulation.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  node.append("circle")
+    .attr("r", d=> analyticsRun ? (8 + d.influence*22) : (8 + d.degree*2))
+    .attr("fill", d=>TYPE_COLOR[d.type])
+    .attr("fill-opacity", d=> analyticsRun && d.corroborated===false ? 0.4 : 0.85)
+    .attr("stroke", d=>{
+      if(!analyticsRun) return "#0A0E13";
+      if(d.corroborated===false) return "#E5484D";
+      if(d.influence>0.55) return "#F2A93B";
+      return "#0A0E13";
+    })
+    .attr("stroke-width", d=> analyticsRun && (d.corroborated===false || d.influence>0.55) ? 3 : 1.5)
+    .attr("stroke-dasharray", d=> analyticsRun && d.corroborated===false ? "3,2" : null)
+    .on("click",(ev,d)=>selectNode(d));
+
+  // small "?" caution badge on uncorroborated nodes once analytics have run
+  node.filter(d=>analyticsRun && d.corroborated===false)
+    .append("text")
+    .attr("text-anchor","middle")
+    .attr("dy","4")
+    .attr("font-family","var(--display)")
+    .attr("font-weight","700")
+    .attr("font-size","12px")
+    .attr("fill","#E5484D")
+    .attr("pointer-events","none")
+    .text("?");
+
+  node.append("text")
+    .attr("class","node-label")
+    .attr("dy", d=>-(10 + (analyticsRun ? d.influence*22 : d.degree*2)))
+    .attr("text-anchor","middle")
+    .text(d=>d.id.length>16 ? d.id.slice(0,15)+"…" : d.id);
+
+  simulation.on("tick", ()=>{
+    link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y)
+        .attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+    node.attr("transform", d=>`translate(${d.x},${d.y})`);
+  });
+
+  // keep reference for click lookups with fresh sim positions
+  graph.liveNodes = nodesCopy;
+  graph.liveLinks = linksCopy;
+}
+
+/* =====================================================================
+   8. INSPECTOR
+   ===================================================================== */
+function selectNode(d){
+  selectedNode = d;
+  switchTab('inspect');
+  const body = document.getElementById("inspectorBody");
+  const conns = graph.liveLinks.filter(l=>l.source.id===d.id || l.target.id===d.id)
+    .sort((a,b)=>b.weight-a.weight);
+
+  let html = `
+    <div class="insp-node">
+      <div class="insp-name">${d.id}</div>
+      <div class="insp-type" style="color:${TYPE_COLOR[d.type]}">${d.type}</div>
+    </div>
+    <div class="metric-row"><span class="metric-label">Direct connections</span><span class="metric-val">${d.degree}</span></div>
+    <div class="metric-row"><span class="metric-label">Appears in records</span><span class="metric-val">${d.records ? d.records.length : "—"}</span></div>
+  `;
+  if(analyticsRun){
+    html += `
+    <div class="metric-row"><span class="metric-label">Betweenness (bridge score)</span><span class="metric-val">${d.betweenness.toFixed(2)}</span></div>
+    <div class="metric-row"><span class="metric-label">Influence score</span><span class="metric-val" style="color:${d.influence>0.55?'#F2A93B':'#DCE4EC'}">${(d.influence*100).toFixed(0)} / 100</span></div>
+    `;
+    if(d.corroborated === false){
+      html += `<div class="alert" style="margin:10px 16px;">
+        <div class="alert-title">⚠ Uncorroborated</div>
+        <div>This entity appears only in FIR complaint(s) — no CDR, bank, surveillance, or social evidence independently confirms it. Treat as an unverified lead, not a confirmed link.</div>
+      </div>`;
+    }
+  }
+  html += `<div class="panel-head" style="border-top:1px solid var(--border); margin-top:4px;"><div class="panel-title" style="font-size:11px;">Connections</div></div>`;
+  conns.forEach(c=>{
+    const other = c.source.id===d.id ? c.target : c.source;
+    const conf = analyticsRun ? c.confidence : null;
+    const badge = conf==="verified"
+      ? `<span style="color:#3FBFAE; font-family:var(--mono); font-size:9.5px;">✓ verified</span>`
+      : conf==="unverified"
+        ? `<span style="color:#7C8B9B; font-family:var(--mono); font-size:9.5px;">◌ unverified</span>`
+        : "";
+    html += `<div class="conn-item">
+      <span>${other.id}</span>
+      <span class="conn-rel" style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+        <span>${c.weight} pts · ${c.records.length} rec</span>
+        ${badge}
+      </span>
+    </div>`;
+  });
+  body.innerHTML = html;
+}
+
+/* =====================================================================
+   9. KEY INFLUENCERS TAB — data computed server-side via NetworkX
+   (degree centrality + betweenness centrality, blended into one score)
+   ===================================================================== */
+function renderInfluencers(){
+  const body = document.getElementById("influencerBody");
+  const ranked = graph.top_influencers || [];
+  let html = `<div style="padding:10px 16px 0; font-size:10.5px; color:var(--text-dim);">
+    NetworkX found <b style="color:var(--text)">${graph.num_communities}</b> distinct clusters in this network. Ranked below by blended degree + betweenness centrality.
+  </div>`;
+  ranked.forEach((n,i)=>{
+    let why = "High number of direct connections across multiple records.";
+    if(n.is_bridge) why = "This is a true cut-vertex — removing it splits the network into disconnected clusters. Strong broker / middleman signal.";
+    else if(n.betweenness > 0.3) why = "Sits on an unusually high number of shortest paths between other entities — likely a broker / middleman role.";
+    else if(n.degree >= 4) why = "Central hub with many direct links — likely a coordinating figure.";
+    html += `
+      <div class="influencer-card">
+        <div class="rank">RANK #${i+1} · INFLUENCE ${(n.influence*100).toFixed(0)}/100</div>
+        <div class="infl-name">${n.id}</div>
+        <div class="infl-why">${why}</div>
+      </div>`;
+  });
+  body.innerHTML = html;
+}
+
+/* =====================================================================
+   10. ALERTS TAB — rule-based anomaly detection, computed server-side
+   over the raw text + NetworkX graph structure (see detect_alerts() in main.py)
+   ===================================================================== */
+function renderAlerts(){
+  const body = document.getElementById("alertBody");
+  const alerts = graph.alerts || [];
+  document.getElementById("statAlerts").textContent = alerts.length;
+
+  const leads = alerts.filter(a=>a.severity!=="caution");
+  const cautions = alerts.filter(a=>a.severity==="caution");
+
+  let html = "";
+  if(leads.length){
+    html += `<div style="padding:10px 16px 2px; font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">Investigation leads</div>`;
+    leads.forEach(a=>{
+      html += `<div class="alert">
+        <div class="alert-title">⚠ ${a.title}</div>
+        <div>${a.text}</div>
+      </div>`;
+    });
+  }
+  if(cautions.length){
+    html += `<div style="padding:14px 16px 2px; font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">Data-reliability cautions</div>`;
+    cautions.forEach(a=>{
+      html += `<div class="alert" style="border-color:rgba(242,169,59,0.4); background:rgba(242,169,59,0.06);">
+        <div class="alert-title" style="color:var(--amber);">◌ ${a.title}</div>
+        <div>${a.text}</div>
+      </div>`;
+    });
+  }
+  body.innerHTML = html || `<div class="inspector-empty">No suspicious patterns detected.</div>`;
+}
+
+/* =====================================================================
+   11. UI HELPERS
+   ===================================================================== */
+function markDone(id){
+  const btn = document.getElementById(id);
+  btn.classList.add("done");
+  btn.querySelector(".step-num").innerHTML = "✓";
+}
+function enable(id){ document.getElementById(id).disabled = false; }
+
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".tab-panel").forEach(p=>p.classList.remove("active"));
+  const idx = {inspect:0, influencers:1, alerts:2}[name];
+  document.querySelectorAll(".tab")[idx].classList.add("active");
+  document.getElementById("tab-"+name).classList.add("active");
+}
+
+window.addEventListener("resize", ()=>{ if(graphBuilt) renderGraph(); });
+</script>
+</body>
+</html>
