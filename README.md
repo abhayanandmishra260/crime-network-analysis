@@ -45,19 +45,7 @@ uvicorn main:app --reload
 Open:
 http://127.0.0.1:8000
 
-## Judge demo flow
 
-1. Run Full Investigation.
-2. Show entity extraction and source counts.
-3. Show the network graph.
-4. Click the highest-influence player.
-5. Show source coverage and linked evidence.
-6. Open Alerts.
-7. Open the Rakesh Oza reliability caution.
-8. Switch to district_admin and show:
-   `✓ HASH CHAIN VALID`
-9. Explain roadmap:
-   Neo4j / multilingual NER / trained anomaly detection.
 
 ## Important
 
